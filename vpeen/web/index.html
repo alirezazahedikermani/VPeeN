@@ -116,7 +116,7 @@
 <!-- ======================= bottom bar ======================= -->
 <footer class="bottombar">
   <div class="modes">
-    <label class="switch" id="sw-system" data-i18n-title="title_switch_system" title="Set the system-wide proxy automatically when connecting (browsers and apps that honour it)">
+    <label data-desktop-only class="switch" id="sw-system" data-i18n-title="title_switch_system" title="Set the system-wide proxy automatically when connecting (browsers and apps that honour it)">
       <input type="checkbox" id="in-system"><span class="track"></span>
       <span class="sw-label" data-i18n="switch_system">System&nbsp;Proxy</span>
     </label>
@@ -220,12 +220,12 @@
           <label for="set-http"><span data-i18n="set_http">HTTP port</span></label>
           <input id="set-http" type="number" class="set-input num" min="1" max="65535">
         </div>
-        <div class="set-row set-row-t">
+        <div data-desktop-only class="set-row set-row-t">
           <label><span data-i18n="set_autoproxy">Auto system proxy</span>
             <span class="set-hint" data-i18n="set_autoproxy_hint">applies on next connect</span></label>
           <label class="switch sm"><input type="checkbox" id="set-autoproxy"><span class="track"></span></label>
         </div>
-        <div class="set-row">
+        <div data-desktop-only class="set-row">
           <label for="set-bypass"><span data-i18n="set_bypass">Bypass list</span>
             <span class="set-hint" data-i18n="set_bypass_hint">these addresses connect direct, without the proxy</span></label>
           <input id="set-bypass" type="text" class="set-input" data-i18n-ph="set_bypass_ph" placeholder="e.g. *.ir, bank.example.com" spellcheck="false">
@@ -234,7 +234,7 @@
 
       <div class="set-group">
         <div class="set-group-title" data-i18n="group_tunnel">VPN tunnel</div>
-        <div class="set-row set-row-t">
+        <div data-desktop-only class="set-row set-row-t">
           <label><span data-i18n="set_tunneldns">Route DNS through the tunnel</span>
             <span class="set-hint" data-i18n="set_tunneldns_hint">prevents DNS leaks</span></label>
           <label class="switch sm"><input type="checkbox" id="set-tunneldns"><span class="track"></span></label>
@@ -253,14 +253,14 @@
           <label for="set-mtu"><span data-i18n="set_mtu">Tunnel MTU</span></label>
           <input id="set-mtu" type="number" class="set-input num" min="1200" max="9000" step="100">
         </div>
-        <div class="set-row set-row-t">
+        <div data-desktop-only class="set-row set-row-t">
           <label><span data-i18n="set_sweep">Clean up crashed sessions</span>
             <span class="set-hint" data-i18n="set_sweep_hint">sweep leftover state on start</span></label>
           <label class="switch sm"><input type="checkbox" id="set-sweep"><span class="track"></span></label>
         </div>
       </div>
 
-      <div class="set-group">
+      <div class="set-group" data-desktop-only>
         <div class="set-group-title" data-i18n="group_updates">Updates</div>
         <div class="set-row set-row-t">
           <label><span data-i18n="set_autoupdate">Automatic updates</span>

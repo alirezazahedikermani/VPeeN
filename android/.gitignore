@@ -1,0 +1,8 @@
+.gradle/
+build/
+local.properties
+*.keystore
+*.jks
+.cxx/
+# fetched by scripts/fetch-android-deps.sh
+app/src/main/jni/hev-socks5-tunnel/

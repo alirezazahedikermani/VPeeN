@@ -41,6 +41,7 @@ from . import __app_name__, __version__
 from . import settings as cfgmod
 from .cli import DEFAULT_STATE_PATH, validate_bind_security
 from .core import Core, spawn_quick_task
+from .utils import IS_ANDROID
 
 OPTIMAL = "optimal"
 
@@ -103,8 +104,10 @@ _STATIC = {
 
 def _asset(*parts) -> str | None:
     """Locate a bundled asset (works from source and frozen builds)."""
+    here = os.path.dirname(os.path.abspath(__file__))
     roots = [getattr(sys, "_MEIPASS", None),
-             os.path.dirname(os.path.dirname(os.path.abspath(__file__)))]
+             os.path.dirname(here),
+             here]          # Android: assets are bundled inside the package
     for root in roots:
         if root:
             p = os.path.join(root, "assets", *parts)
@@ -329,7 +332,9 @@ class Bridge:
         self.cfg = cfgmod.load()
         self.core = Core(state_path, insecure)
         self.tunnel = None if demo else self._make_tunnel()
-        self.update = None if demo else self._make_update()
+        # Android: updates ship as a new APK, the PyInstaller exe-swap
+        # updater has nothing to swap there.
+        self.update = None if (demo or IS_ANDROID) else self._make_update()
         self.lock = threading.RLock()
         self.seq = 0
         self.ui_events = deque(maxlen=400)     # [(seq, ev), ...]
@@ -366,6 +371,12 @@ class Bridge:
 
     # ------------------------------------------------------------- plumbing
     def _make_tunnel(self):
+        if IS_ANDROID:
+            try:
+                from .android_tunnel import AndroidTunnelController
+                return AndroidTunnelController(self.core.events)
+            except Exception:
+                return None
         try:
             from .tunnel import TunnelController
             return TunnelController(self.core.events)
@@ -381,7 +392,7 @@ class Bridge:
         whole network stayed bricked until a manual route cleanup or reboot.
         Runs in a background thread; only prompts for elevation when a
         session journal is actually present (a crashed session)."""
-        if self.demo or self.tunnel is None:
+        if self.demo or self.tunnel is None or IS_ANDROID:
             return
         if not bool(self.cfg.get("tunnel_sweep", True)):
             return
@@ -624,7 +635,9 @@ class Bridge:
                                       "not raising the tunnel (blackhole "
                                       "guard)")
             return
-        self.log("Requesting administrator rights to enable the VPN tunnel...")
+        if not IS_ANDROID:
+            self.log("Requesting administrator rights to enable the VPN "
+                     "tunnel...")
         try:
             self.tunnel.connect(
                 socks_port=socks_port,
@@ -855,7 +868,8 @@ class Bridge:
         self.log(f"Connecting to '{label}' ({mode} mode)...")
         self._stop_after_tunnel = False
         self._pending_tunnel = want_tunnel
-        set_system = bool(cfg.get("auto_system_proxy", False)) and not want_tunnel
+        set_system = (bool(cfg.get("auto_system_proxy", False))
+                      and not want_tunnel and not IS_ANDROID)
         # v4.9.0: split tunneling - domains that stay DIRECT while the
         # system proxy is on (tunnel mode routes EVERYTHING by design).
         from .systemproxy import parse_bypass
@@ -1007,6 +1021,7 @@ class Bridge:
                 "version": __version__,
                 "app": __app_name__,
                 "native_window": native_window,
+                "platform": "android" if IS_ANDROID else sys.platform,
                 "phase": self.phase,
                 "mode": self.conn_mode,
                 "region": self.region,
@@ -1227,6 +1242,12 @@ class WebUI:
                     with open(fp, "rb") as f:
                         return self._send(200, f.read(), "image/png",
                                           cache="public, max-age=86400")
+                if path == "/icon.png":
+                    fp = _asset("icon.png")
+                    if fp:
+                        with open(fp, "rb") as f:
+                            return self._send(200, f.read(), "image/png",
+                                              cache="no-cache")
                 entry = _STATIC.get(path)
                 if entry is None:
                     return self._send(404, b"not found", "text/plain")
@@ -1321,13 +1342,19 @@ class WebUI:
                 if path == "/api/update/check":
                     if bridge.update is None:
                         return self._json({"ok": False,
-                                            "error": "demo mode"}, 400)
+                                            "error": ("install the new APK "
+                                                      "from GitHub Releases"
+                                                      if IS_ANDROID else
+                                                      "demo mode")}, 400)
                     bridge.update.start_check(manual=True)
                     return self._json({"ok": True})
                 if path == "/api/update/install":
                     if bridge.update is None:
                         return self._json({"ok": False,
-                                            "error": "demo mode"}, 400)
+                                            "error": ("install the new APK "
+                                                      "from GitHub Releases"
+                                                      if IS_ANDROID else
+                                                      "demo mode")}, 400)
                     if bridge.update.state().get("source_install"):
                         return self._json({"ok": False,
                                             "error": "source installation - "

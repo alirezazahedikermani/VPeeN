@@ -1084,6 +1084,8 @@ async function boot() {
         ${t("error_cannot_reach")}</div>`;
     return;
   }
+  // Android shell (WebView): hide desktop-only controls via CSS
+  if (st.platform === "android") document.documentElement.classList.add("plat-android");
   Object.assign(S, {
     phase: st.phase,
     mode: st.mode,

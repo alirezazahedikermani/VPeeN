@@ -8,6 +8,12 @@ import threading
 import time
 
 IS_WINDOWS = os.name == "nt"
+# Android (Chaquopy embedded interpreter): sys.platform still reads "linux"
+# on older CPython builds, so also look at the Android-only API probe and
+# the env flag the Java launcher sets.
+IS_ANDROID = (hasattr(sys, "getandroidapilevel")
+              or sys.platform == "android"
+              or os.environ.get("VPEEN_ANDROID") == "1")
 
 
 def _enable_vt():
