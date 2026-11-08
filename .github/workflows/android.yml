@@ -94,14 +94,32 @@ jobs:
           VPEEN_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           chmod +x gradlew
-          # the Gradle distribution download occasionally hits a 5xx: retry
-          # ONLY the bootstrap, never a real build failure
-          for i in 1 2 3 4; do
-            ./gradlew --no-daemon --version && break
-            [ "$i" = 4 ] && exit 1
-            sleep $((i * 10))
+          # The wrapper downloads Gradle via github.com release assets, which
+          # sometimes answer 504 for minutes. Retry, then fall back to
+          # Gradle's own CDN / a mirror - always checked against the SHA-256
+          # pinned in gradle-wrapper.properties.
+          GRADLE=./gradlew
+          ok=0
+          for i in 1 2 3; do
+            if ./gradlew --no-daemon --version; then ok=1; break; fi
+            sleep $((i * 15))
           done
-          ./gradlew --no-daemon --stacktrace assembleRelease
+          if [ "$ok" != 1 ]; then
+            ver=$(sed -n 's|.*gradle-\([0-9.]*\)-bin.zip|\1|p' gradle/wrapper/gradle-wrapper.properties)
+            sum=$(sed -n 's|^distributionSha256Sum=||p' gradle/wrapper/gradle-wrapper.properties)
+            for url in "https://downloads.gradle.org/distributions/gradle-$ver-bin.zip" \
+                       "https://mirrors.cloud.tencent.com/gradle/gradle-$ver-bin.zip"; do
+              echo "Wrapper download failed - trying $url"
+              if curl -fsSL --retry 3 -o "$RUNNER_TEMP/gradle.zip" "$url" \
+                 && echo "$sum  $RUNNER_TEMP/gradle.zip" | sha256sum -c -; then
+                unzip -q -o "$RUNNER_TEMP/gradle.zip" -d "$RUNNER_TEMP"
+                GRADLE="$RUNNER_TEMP/gradle-$ver/bin/gradle"
+                ok=1; break
+              fi
+            done
+          fi
+          [ "$ok" = 1 ] || { echo "::error::could not obtain Gradle"; exit 1; }
+          "$GRADLE" --no-daemon --stacktrace assembleRelease
 
       # A missing JNI lib or Python package would still build fine but the
       # VPN would never pass traffic on the phone - fail the build instead.
