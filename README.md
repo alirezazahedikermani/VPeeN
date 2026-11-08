@@ -11,7 +11,7 @@
 `No login` · `No subscription` · `No browser needed` · `Pure-Python core`
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-00d68f.svg?style=for-the-badge&labelColor=0e1526)](LICENSE)
-[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-2f81f7.svg?style=for-the-badge&labelColor=0e1526)](#-quick-start)
+[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Android-2f81f7.svg?style=for-the-badge&labelColor=0e1526)](#-quick-start)
 [![Python](https://img.shields.io/badge/Python-3.9%2B-ffd43b.svg?style=for-the-badge&labelColor=0e1526)](https://www.python.org/)
 [![GUI](https://img.shields.io/badge/GUI-Sangar%20v4.9-2de3a7.svg?style=for-the-badge&labelColor=0e1526)](CHANGELOG-v4.9.0.md)
 [![Release](https://img.shields.io/github/v/release/SirBNL/VPeeN?style=for-the-badge&labelColor=0e1526&color=00d68f)](../../releases)
@@ -179,6 +179,25 @@ SOCKS5 :  socks5://127.0.0.1:1080
 HTTP   :  http://127.0.0.1:8080
 ```
 
+### 📱 Option 4 — Android
+
+Grab `VPeeN-x.y.z-Android-universal.apk` from the [releases](../../releases) (or the
+per-ABI APK for your phone, usually `arm64-v8a`) and install it — Android 7.0+.
+
+- Same engine, same Aurora UI: the pure-Python core runs inside the app
+  ([Chaquopy](https://chaquo.com/chaquopy/)) and the web UI is shown in a WebView
+- **System-wide VPN** with no root: Android's `VpnService` hands VPeeN a TUN
+  interface and [hev-socks5-tunnel](https://github.com/heiher/hev-socks5-tunnel) feeds
+  it into the local SOCKS5 engine — every app is covered, DNS and IPv6 included
+- First connect shows Android's *"allow VPeeN to set up a VPN connection"* prompt
+- Kill switch: if the tunnel engine dies, the VPN interface is kept (traffic is blocked,
+  not leaked) while VPeeN restarts it. For a hard OS-level guarantee also enable
+  *Settings → Network → VPN → VPeeN → Always-on VPN + Block connections without VPN*
+- Proxy-only mode (VPN switch off) still exposes SOCKS5 `127.0.0.1:1080` /
+  HTTP `127.0.0.1:8080` for apps that let you set a proxy — keep VPeeN open in that mode
+- Desktop-only settings (system proxy, bypass list, crash sweep, exe self-update) are
+  hidden; updates arrive as a new APK
+
 ## ⚙️ How it works
 
 VPeeN reproduces what the free VeePN extension does inside the browser — but for the whole OS:
@@ -299,6 +318,19 @@ version tags (`v*`) automatically produce a [release](../../releases) with binar
 on Windows the **Setup installer** is compiled with Inno Setup from
 [`installer/vpeen.iss`](installer/vpeen.iss).
 
+**Android APK** (JDK 17, Android SDK + NDK, Python 3.11 on `PATH`):
+
+```bash
+scripts/fetch-android-deps.sh            # pinned hev-socks5-tunnel sources
+cd android && ./gradlew assembleRelease  # → app/build/outputs/apk/release/
+```
+
+CI builds it in [`.github/workflows/android.yml`](.github/workflows/android.yml) (standalone on
+PRs/branches, and from `build.yml` for releases). Set the `ANDROID_KEYSTORE_BASE64`,
+`ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD` secrets to sign
+releases with your own key; otherwise a throw-away debug key is used (fine for testing,
+but builds cannot be installed over each other).
+
 ## 📁 Project structure
 
 ```
@@ -321,11 +353,14 @@ VPeeN/
 │   ├── selfupdate.py     # one-click self-updater (+ installed-version sync)
 │   ├── settings.py       # persistent app settings (atomic writes)
 │   ├── cli.py            # headless command-line mode
+│   ├── android_main.py   # Android entry point (called from Java via Chaquopy)
+│   ├── android_tunnel.py # Android VpnService tunnel controller
 │   └── utils.py          # shared helpers
+├── android/              # Android app: WebView shell, VpnService, Gradle build
 ├── installer/vpeen.iss   # Inno Setup script → VPeeN-Setup-x.y.z.exe (CI)
 ├── extension/            # "VPeeN Bridge" Chrome extension (MV3)
 ├── assets/               # icon, logo, banner, flags/ (92 circular flags)
-├── scripts/              # fetch-binaries + 11 verification suites + release canary/tools
+├── scripts/              # fetch-binaries + 12 verification suites + release canary/tools
 ├── docs/                 # screenshots + demo GIF
 └── .github/workflows/    # multi-OS build + release pipeline (test gate + release canary)
 ```
@@ -336,6 +371,8 @@ VPeeN/
 |---|---|---|
 | [tun2socks](https://github.com/xjasonlyu/tun2socks) v2.7.0 | **MIT** | TUN engine for Tunnel mode (fetched at build time, never at runtime) |
 | [wintun](https://www.wintun.net/) 0.14.1 | Wintun Prebuilt Binaries License | signed virtual-adapter driver (Windows, used via its permitted API) |
+| [hev-socks5-tunnel](https://github.com/heiher/hev-socks5-tunnel) 2.19.3 | **MIT** | TUN engine of the Android app (JNI, compiled from source in CI) |
+| [Chaquopy](https://chaquo.com/chaquopy/) | **MIT** | embeds the Python engine in the Android app |
 | [pywebview](https://pywebview.ngole.io/) | BSD-3 | native desktop window for the web GUI (optional; falls back to the browser) |
 | [Inno Setup](https://jrsoftware.org/isinfo.php) | Inno Setup License | compiles the Windows installer in CI (build-time only) |
 | Flags | [flagcdn](https://flagcdn.com/) (public domain) | circular country flags |

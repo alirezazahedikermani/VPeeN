@@ -65,6 +65,10 @@ jobs:
       - name: Doctor verification
         run: python scripts/test_doctor.py
 
+      # Android port: engine in the on-device layout, VpnService bridge
+      - name: Android port verification
+        run: python scripts/test_android.py
+
   build:
     name: Build (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
@@ -197,12 +201,19 @@ jobs:
           name: ${{ matrix.asset }}
           path: dist/VPeeN-*
 
+  # Android APKs (Chaquopy + VpnService + hev-socks5-tunnel) - the same
+  # workflow runs standalone on PRs/branches; here it feeds the release.
+  android:
+    name: Android
+    uses: ./.github/workflows/android.yml
+    secrets: inherit
+
   release:
     name: Release
     # v4.8.0 "Sentinel": gated on the full test suite too - a failing
     # regression anywhere means NO release, period (0.001% doubt = no
     # publish).
-    needs: [build, test]
+    needs: [build, test, android]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     steps:

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">VPeeN</string>
+    <string name="notif_channel">VPN status</string>
+    <string name="notif_title">VPeeN is protecting this device</string>
+    <string name="notif_text">All traffic goes through the VPN tunnel. Tap to open.</string>
+    <string name="notif_disconnect">Disconnect</string>
+    <string name="starting">Starting VPeeN…</string>
+</resources>

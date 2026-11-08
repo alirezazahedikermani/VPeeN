@@ -1042,6 +1042,19 @@ body[data-modal="doctor"] #modal-doctor .modal-card { transform: translateY(0) s
   .bottombar { flex-direction: column; gap: 10px; align-items: flex-start; }
 }
 
+/* phones (Android WebView shell and narrow browsers) */
+@media (max-width: 480px) {
+  .topbar { padding: 14px 14px 8px; }
+  .brand { gap: 8px; }
+  .brand-tag { display: none; }
+  .top-right { gap: 6px; }
+}
+
+/* Android: hide controls that only make sense on a desktop OS
+   (system proxy API, PAC bypass list, crash-route sweep, exe self-update).
+   DNS is always routed through the VpnService there. */
+.plat-android [data-desktop-only] { display: none !important; }
+
 /* reduced motion */
 @media (prefers-reduced-motion: reduce) {
   .aurora, .ring-dashes, .status-dot, .orb-core { animation: none !important; }
