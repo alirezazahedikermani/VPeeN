@@ -94,6 +94,13 @@ jobs:
           VPEEN_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           chmod +x gradlew
+          # the Gradle distribution download occasionally hits a 5xx: retry
+          # ONLY the bootstrap, never a real build failure
+          for i in 1 2 3 4; do
+            ./gradlew --no-daemon --version && break
+            [ "$i" = 4 ] && exit 1
+            sleep $((i * 10))
+          done
           ./gradlew --no-daemon --stacktrace assembleRelease
 
       - name: Collect APKs
