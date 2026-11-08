@@ -39,7 +39,6 @@ public class VpeenVpnService extends VpnService {
     private static final String CHANNEL = "vpn";
     private static final int NOTIF_ID = 1;
     private static final String TUN_V4 = "198.18.0.1";
-    private static final String TUN_V6 = "fc00::1";
 
     static volatile VpeenVpnService instance;
 
@@ -88,9 +87,11 @@ public class VpeenVpnService extends VpnService {
                     .setMtu(VpnBridge.mtu)
                     .addAddress(TUN_V4, 32)
                     .addRoute("0.0.0.0", 0)
-                    // route IPv6 into the tunnel too, so it cannot leak
-                    .addAddress(TUN_V6, 128)
-                    .addRoute("::", 0)
+                    // NO IPv6 address/route on purpose: when a VPN provides
+                    // no route for a family, Android BLOCKS that family (see
+                    // VpnService.Builder#allowFamily), so IPv6 cannot leak -
+                    // and apps never try IPv6 first (no AAAA lookups), which
+                    // the IPv4-only VeePN egress cannot serve.
                     // DNS queries are relayed by the engine over the tunnel
                     // (SOCKS5 UDP ASSOCIATE, :53 only)
                     .addDnsServer("1.1.1.1")
@@ -126,7 +127,6 @@ public class VpeenVpnService extends VpnService {
         String yaml = "tunnel:\n"
                 + "  mtu: " + VpnBridge.mtu + "\n"
                 + "  ipv4: " + TUN_V4 + "\n"
-                + "  ipv6: '" + TUN_V6 + "'\n"
                 + "socks5:\n"
                 + "  port: " + VpnBridge.socksPort + "\n"
                 + "  address: 127.0.0.1\n"
@@ -143,7 +143,13 @@ public class VpeenVpnService extends VpnService {
     /** Watches the native engine; heals it (kill switch) or reports. */
     private void startMonitor() {
         monitor = new Thread(() -> {
+            long started = System.currentTimeMillis();
+            boolean checked = false;
             while (!stopping) {
+                if (!checked && System.currentTimeMillis() - started > 12000) {
+                    checked = true;
+                    trafficCheck();
+                }
                 try {
                     Thread.sleep(1500);
                 } catch (InterruptedException e) {
@@ -185,6 +191,36 @@ public class VpeenVpnService extends VpnService {
         }, "vpeen-vpn-monitor");
         monitor.setDaemon(true);
         monitor.start();
+    }
+
+    /**
+     * One-shot self-diagnosis shortly after connect, written to the in-app
+     * log: did packets enter the VPN, and did anything come back?
+     */
+    private void trafficCheck() {
+        long[] st;
+        try {
+            st = TProxyService.TProxyGetStats();
+        } catch (Throwable t) {
+            return;
+        }
+        if (st == null || st.length < 4) {
+            return;
+        }
+        // hev counters: tx = read from the TUN (apps -> VPN),
+        //               rx = written to the TUN (VPN -> apps)
+        long fromApps = st[0], fromAppsBytes = st[1], toApps = st[2], toAppsBytes = st[3];
+        String counts = fromApps + " packets (" + fromAppsBytes / 1024 + " KB) from apps, "
+                + toApps + " packets (" + toAppsBytes / 1024 + " KB) back to apps";
+        if (fromApps == 0) {
+            VpnBridge.report("log", "warn|Tunnel check: no app traffic entered the VPN yet ("
+                    + counts + "). Open a website to test.");
+        } else if (toApps == 0) {
+            VpnBridge.report("log", "err|Tunnel check: apps are sending but NOTHING comes back ("
+                    + counts + ") - the VeePN server is not answering; try another location.");
+        } else {
+            VpnBridge.report("log", "ok|Tunnel check: traffic is flowing (" + counts + ").");
+        }
     }
 
     /** Stop everything; empty detail = normal disconnect ("down"). */

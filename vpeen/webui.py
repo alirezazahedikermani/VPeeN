@@ -666,6 +666,13 @@ class Bridge:
 
     def _tun_failed_fallback(self, reason: str):
         self.log(f"Tunnel mode unavailable: {reason}", "warn")
+        if IS_ANDROID:
+            # never show "Connected" for a proxy-only fallback on a phone:
+            # it looks protected while no app traffic is carried at all
+            self.log("The Android VPN could not be started - disconnecting. "
+                     "Open the logs (>_) for the reason and try again.", "err")
+            self.request_disconnect()
+            return
         if self.cfg.get("tun_fallback", True):
             self.log("Falling back to proxy mode (browsers only).", "warn")
             with self.lock:
@@ -738,7 +745,7 @@ class Bridge:
                 return
             if was_mode == "tunnel":
                 self.log(f"VPN tunnel went down ({detail}).", "warn")
-                if self.cfg.get("tun_fallback", True):
+                if self.cfg.get("tun_fallback", True) and not IS_ANDROID:
                     self.log("Traffic continues through proxy mode "
                              "(browsers only).", "warn")
                     self.emit({"t": "phase", "phase": "connected",
@@ -861,7 +868,10 @@ class Bridge:
             self.log("Invalid ports (must differ and be 1-65535) - "
                      "check Settings.", "err")
             return
-        want_tunnel = bool(cfg.get("tunnel_enabled")) and self.tunnel is not None
+        # Android: proxy-only mode protects nothing system-wide (apps do not
+        # honour a proxy), so the phone ALWAYS connects as a VPN.
+        want_tunnel = ((IS_ANDROID or bool(cfg.get("tunnel_enabled")))
+                       and self.tunnel is not None)
         target = None if self.selected == OPTIMAL else self.selected
         label = self._region_label(self.selected)
         mode = "tunnel" if want_tunnel else "proxy"

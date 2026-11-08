@@ -94,14 +94,54 @@ jobs:
           VPEEN_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           chmod +x gradlew
-          # the Gradle distribution download occasionally hits a 5xx: retry
-          # ONLY the bootstrap, never a real build failure
-          for i in 1 2 3 4; do
-            ./gradlew --no-daemon --version && break
-            [ "$i" = 4 ] && exit 1
-            sleep $((i * 10))
+          # The wrapper downloads Gradle via github.com release assets, which
+          # sometimes answer 504 for minutes. Retry, then fall back to
+          # Gradle's own CDN / a mirror - always checked against the SHA-256
+          # pinned in gradle-wrapper.properties.
+          GRADLE=./gradlew
+          ok=0
+          for i in 1 2 3; do
+            if ./gradlew --no-daemon --version; then ok=1; break; fi
+            sleep $((i * 15))
           done
-          ./gradlew --no-daemon --stacktrace assembleRelease
+          if [ "$ok" != 1 ]; then
+            ver=$(sed -n 's|.*gradle-\([0-9.]*\)-bin.zip|\1|p' gradle/wrapper/gradle-wrapper.properties)
+            sum=$(sed -n 's|^distributionSha256Sum=||p' gradle/wrapper/gradle-wrapper.properties)
+            for url in "https://downloads.gradle.org/distributions/gradle-$ver-bin.zip" \
+                       "https://mirrors.cloud.tencent.com/gradle/gradle-$ver-bin.zip"; do
+              echo "Wrapper download failed - trying $url"
+              if curl -fsSL --retry 3 -o "$RUNNER_TEMP/gradle.zip" "$url" \
+                 && echo "$sum  $RUNNER_TEMP/gradle.zip" | sha256sum -c -; then
+                unzip -q -o "$RUNNER_TEMP/gradle.zip" -d "$RUNNER_TEMP"
+                GRADLE="$RUNNER_TEMP/gradle-$ver/bin/gradle"
+                ok=1; break
+              fi
+            done
+          fi
+          [ "$ok" = 1 ] || { echo "::error::could not obtain Gradle"; exit 1; }
+          "$GRADLE" --no-daemon --stacktrace assembleRelease
+
+      # A missing JNI lib or Python package would still build fine but the
+      # VPN would never pass traffic on the phone - fail the build instead.
+      - name: Verify APK contents
+        run: |
+          apk=android/app/build/outputs/apk/release/app-universal-release.apk
+          unzip -l "$apk" > apk-list.txt
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            grep -q "lib/$abi/libhev-socks5-tunnel.so" apk-list.txt \
+              || { echo "::error::libhev-socks5-tunnel.so missing for $abi"; exit 1; }
+            grep -q "lib/$abi/libpython3.11.so" apk-list.txt \
+              || { echo "::error::libpython3.11.so missing for $abi"; exit 1; }
+          done
+          grep -q "assets/chaquopy/app.imy" apk-list.txt \
+            || { echo "::error::Python app bundle (app.imy) missing"; exit 1; }
+          unzip -p "$apk" assets/chaquopy/app.imy > app.imy
+          for f in vpeen/android_main.py vpeen/android_tunnel.py vpeen/webui.py \
+                   vpeen/web/index.html vpeen/assets/icon.png vpeen/assets/flags/nl.png; do
+            unzip -l app.imy | grep -q "$f" \
+              || { echo "::error::$f missing from the Python bundle"; exit 1; }
+          done
+          echo "APK contents verified."
 
       - name: Collect APKs
         run: |

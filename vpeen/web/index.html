@@ -120,7 +120,7 @@
       <input type="checkbox" id="in-system"><span class="track"></span>
       <span class="sw-label" data-i18n="switch_system">System&nbsp;Proxy</span>
     </label>
-    <label class="switch" id="sw-tunnel" data-i18n-title="title_switch_tunnel" title="Route ALL device traffic through a VPN tunnel (needs admin)">
+    <label data-desktop-only class="switch" id="sw-tunnel" data-i18n-title="title_switch_tunnel" title="Route ALL device traffic through a VPN tunnel (needs admin)">
       <input type="checkbox" id="in-tunnel"><span class="track"></span>
       <span class="sw-label" data-i18n="switch_tunnel">VPN&nbsp;Tunnel</span>
     </label>
@@ -239,7 +239,7 @@
             <span class="set-hint" data-i18n="set_tunneldns_hint">prevents DNS leaks</span></label>
           <label class="switch sm"><input type="checkbox" id="set-tunneldns"><span class="track"></span></label>
         </div>
-        <div class="set-row set-row-t">
+        <div data-desktop-only class="set-row set-row-t">
           <label><span data-i18n="set_tunfallback">Fall back to proxy mode</span>
             <span class="set-hint" data-i18n="set_tunfallback_hint">if the tunnel cannot start</span></label>
           <label class="switch sm"><input type="checkbox" id="set-tunfallback"><span class="track"></span></label>
