@@ -103,6 +103,28 @@ jobs:
           done
           ./gradlew --no-daemon --stacktrace assembleRelease
 
+      # A missing JNI lib or Python package would still build fine but the
+      # VPN would never pass traffic on the phone - fail the build instead.
+      - name: Verify APK contents
+        run: |
+          apk=android/app/build/outputs/apk/release/app-universal-release.apk
+          unzip -l "$apk" > apk-list.txt
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            grep -q "lib/$abi/libhev-socks5-tunnel.so" apk-list.txt \
+              || { echo "::error::libhev-socks5-tunnel.so missing for $abi"; exit 1; }
+            grep -q "lib/$abi/libpython3.11.so" apk-list.txt \
+              || { echo "::error::libpython3.11.so missing for $abi"; exit 1; }
+          done
+          grep -q "assets/chaquopy/app.imy" apk-list.txt \
+            || { echo "::error::Python app bundle (app.imy) missing"; exit 1; }
+          unzip -p "$apk" assets/chaquopy/app.imy > app.imy
+          for f in vpeen/android_main.py vpeen/android_tunnel.py vpeen/webui.py \
+                   vpeen/web/index.html vpeen/assets/icon.png vpeen/assets/flags/nl.png; do
+            unzip -l app.imy | grep -q "$f" \
+              || { echo "::error::$f missing from the Python bundle"; exit 1; }
+          done
+          echo "APK contents verified."
+
       - name: Collect APKs
         run: |
           mkdir -p dist

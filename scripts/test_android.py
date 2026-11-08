@@ -194,13 +194,55 @@ def test_controller(am):
     check("2l Bridge: kill switch lockdown state",
           bridge.ks_state == "lockdown")
 
+    # diagnostics from Java land in the UI log, not as a phase change
+    q2 = queue.Queue()
+    ctl2 = AndroidTunnelController(q2)
+    on_vpn_state("log", "err|Tunnel check: apps are sending but NOTHING "
+                        "comes back")
+    ev = q2.get_nowait() if not q2.empty() else {}
+    check("2m Java 'log' diagnostics become an error log line",
+          ev.get("ev") == "log" and ev.get("level") == "err"
+          and "NOTHING" in ev.get("line", "") and "phase" not in ev, str(ev))
+    check("2n a log line does not change the tunnel state",
+          ctl2.state == "down")
+    bridge.tunnel = ctl2                 # keep the module's _active consistent
+
+    # a failed VPN must NOT turn into a fake "connected" proxy fallback
+    with bridge.lock:
+        bridge.phase, bridge.conn_mode = "connecting", "proxy"
+    bridge.cfg["tun_fallback"] = True
+    disconnects = []
+    orig = bridge.request_disconnect
+    bridge.request_disconnect = lambda: disconnects.append(1)
+    try:
+        bridge._tun_failed_fallback("VPN permission was not granted")
+    finally:
+        bridge.request_disconnect = orig
+    check("2o Android: VPN failure disconnects instead of proxy fallback",
+          disconnects and bridge.phase == "connecting", bridge.phase)
+    with bridge.lock:
+        bridge.phase, bridge.conn_mode = "connected", "tunnel"
+    disconnects.clear()
+    bridge._stop_after_tunnel = False
+    bridge.request_disconnect = lambda: disconnects.append(1)
+    try:
+        bridge.handle_event({"type": "tunnel", "phase": "error",
+                             "detail": "revoked"})
+    finally:
+        bridge.request_disconnect = orig
+    check("2p Android: tunnel loss disconnects (no proxy-only 'connected')",
+          bool(disconnects))
+    src = read(REPO, "vpeen", "webui.py")
+    check("2q Android always connects as a VPN (no proxy-only mode)",
+          "IS_ANDROID or bool(cfg.get(\"tunnel_enabled\"))" in src)
+
 
 def test_frontend():
     print("\n[3] web UI on Android")
     html = read(REPO, "vpeen", "web", "index.html")
     css = read(REPO, "vpeen", "web", "style.css")
     js = read(REPO, "vpeen", "web", "app.js")
-    for anchor in ('id="sw-system"', 'id="set-autoproxy"', 'id="set-bypass"',
+    for anchor in ('id="sw-system"', 'id="sw-tunnel"', 'id="set-tunfallback"', 'id="set-autoproxy"', 'id="set-bypass"',
                    'id="set-sweep"', 'id="set-autoupdate"'):
         i = html.index(anchor)
         start = max(html.rfind("<div", 0, i), html.rfind("<label", 0, i))
@@ -240,6 +282,10 @@ def test_project():
                "VpeenVpnService.java")
     check("4e anti-loop: the app excludes itself from its VPN",
           "addDisallowedApplication(getPackageName())" in svc)
+    check("4e2 IPv4-only VPN (IPv6 blocked by Android, never half-routed)",
+          'addRoute("::"' not in svc and "ipv6:" not in svc)
+    check("4e3 traffic self-check reports into the app log",
+          "TProxyGetStats()" in svc and 'report("log"' in svc)
     py_tun = read(REPO, "vpeen", "android_tunnel.py")
     for phase in ("up", "down", "error", "ks_engaged", "ks_healed",
                   "ks_lockdown"):

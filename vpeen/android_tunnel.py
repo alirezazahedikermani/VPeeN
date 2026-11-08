@@ -43,7 +43,8 @@ def _bridge():
 def on_vpn_state(phase: str, detail: str = "") -> None:
     """Called from Java (any thread) whenever the VpnService changes state.
 
-    phase: up | down | error | ks_engaged | ks_healed | ks_lockdown"""
+    phase: up | down | error | ks_engaged | ks_healed | ks_lockdown,
+           or "log" with detail "level|message" (diagnostics)"""
     with _lock:
         ctl = _active
     if ctl is not None:
@@ -69,6 +70,14 @@ class AndroidTunnelController:
         self._emit(ev="log", level=lvl, line=msg)
 
     def _on_java_state(self, phase: str, detail: str) -> None:
+        if phase == "log":
+            # diagnostics from the Java side: "level|message"
+            lvl, _, msg = detail.partition("|")
+            if not msg:
+                lvl, msg = "info", detail
+            self.log(msg, lvl if lvl in ("info", "ok", "warn", "err")
+                     else "info")
+            return
         if phase == "up":
             self.state = "up"
         elif phase in ("down", "error"):
